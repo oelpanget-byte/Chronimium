@@ -381,7 +381,6 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // GENERATE OR REUSE ANONYMOUS DEVICE OWNER ID
     let ownerId = localStorage.getItem('chronimium_owner_id');
     if (!ownerId) {
       ownerId = 'device_' + Math.random().toString(36).substring(2, 15);
@@ -520,7 +519,6 @@
           snap.forEach(doc => {
             const data = doc.data();
             const safe = encodeURIComponent(data.encoded);
-            const isOwner = data.ownerId === ownerId;
             const card = document.createElement('div');
             card.className = 'link-card';
             card.innerHTML = `
@@ -530,7 +528,6 @@
               </div>
               <div class="action-btns">
                 <button class="btn-action" onclick="window.open('?u=${safe}', '_blank')">Open</button>
-                ${isOwner ? `<button class="btn-action btn-danger" onclick="deleteLink('${doc.id}')">Delete</button>` : ''}
               </div>
             `;
             grid.appendChild(card);
