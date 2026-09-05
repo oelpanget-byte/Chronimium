@@ -276,8 +276,8 @@
       <div class="nav-left">
         <div class="logo">Chronimium</div>
         <div class="nav-links">
-          <button class="nav-btn active" onclick="showPage('dashboard')">Dashboard</button>
-          <button class="nav-btn" onclick="showPage('explore')">Explore</button>
+          <button class="nav-btn active" onclick="showPage('dashboard', event)">Dashboard</button>
+          <button class="nav-btn" onclick="showPage('explore', event)">Explore</button>
         </div>
       </div>
     </nav>
@@ -343,22 +343,34 @@
 
   <script>
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT.firebaseapp.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyDmbZn2A9rC5i2Nz52NEluy2XhwiUqHFe4",
+      authDomain: "chronimium-d7a8b.firebaseapp.com",
+      projectId: "chronimium-d7a8b",
+      storageBucket: "chronimium-d7a8b.firebasestorage.app",
+      messagingSenderId: "792047365269",
+      appId: "1:792047365269:web:949f11c077693c1d37bf9c",
+      measurementId: "G-4Y2SBMDHE0"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    function showPage(page) {
+    let exploreUnsubscribe = null;
+
+    function showPage(page, evt) {
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
       document.getElementById(page).classList.add('active');
-      event.target.classList.add('active');
-      if (page === 'explore') loadExplore();
+      if (evt && evt.target) {
+        evt.target.classList.add('active');
+      }
+      if (page === 'explore') {
+        listenExploreRealtime();
+      } else {
+        if (exploreUnsubscribe) {
+          exploreUnsubscribe();
+          exploreUnsubscribe = null;
+        }
+      }
     }
 
     async function createLink() {
@@ -402,41 +414,47 @@
       alert('Link copied!');
     }
 
-    async function loadExplore() {
+    function escapeHtml(str) {
+      return (str || '').replace(/[&<>"']/g, (m) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[m]));
+    }
+
+    function listenExploreRealtime() {
       const grid = document.getElementById('linksGrid');
       grid.innerHTML = '<div class="empty">Loading...</div>';
 
-      try {
-        const snap = await db.collection('links')
-          .where('public', '==', true)
-          .orderBy('createdAt', 'desc')
-          .limit(50)
-          .get();
+      if (exploreUnsubscribe) exploreUnsubscribe();
 
-        if (snap.empty) {
-          grid.innerHTML = '<div class="empty">No public links yet</div>';
-          return;
-        }
+      exploreUnsubscribe = db.collection('links')
+        .where('public', '==', true)
+        .orderBy('createdAt', 'desc')
+        .limit(50)
+        .onSnapshot((snap) => {
+          if (snap.empty) {
+            grid.innerHTML = '<div class="empty">No public links yet</div>';
+            return;
+          }
 
-        grid.innerHTML = '';
-        snap.forEach(doc => {
-          const data = doc.data();
-          const safe = encodeURIComponent(data.encoded);
-          const card = document.createElement('div');
-          card.className = 'link-card';
-          card.innerHTML = `
-            <div class="link-info">
-              <h3>${data.title}</h3>
-              <p>${data.tasks || 1} tasks • by Anonymous</p>
-            </div>
-            <button class="open-btn" onclick="window.open('?u=${safe}', '_blank')">Open</button>
-          `;
-          grid.appendChild(card);
+          grid.innerHTML = '';
+          snap.forEach(doc => {
+            const data = doc.data();
+            const safe = encodeURIComponent(data.encoded);
+            const card = document.createElement('div');
+            card.className = 'link-card';
+            card.innerHTML = `
+              <div class="link-info">
+                <h3>${escapeHtml(data.title)}</h3>
+                <p>${data.tasks || 1} tasks • by Anonymous</p>
+              </div>
+              <button class="open-btn" onclick="window.open('?u=${safe}', '_blank')">Open</button>
+            `;
+            grid.appendChild(card);
+          });
+        }, (err) => {
+          console.error(err);
+          grid.innerHTML = '<div class="empty">Error loading links</div>';
         });
-      } catch (err) {
-        console.error(err);
-        grid.innerHTML = '<div class="empty">Error loading links</div>';
-      }
     }
 
     // UNLOCK SYSTEM
