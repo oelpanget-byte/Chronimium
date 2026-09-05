@@ -145,7 +145,6 @@
       cursor: pointer;
     }
 
-    /* MY LINKS & EXPLORE LISTS */
     .section-title {
       font-size: 18px;
       font-weight: 600;
@@ -166,9 +165,7 @@
       align-items: center;
       transition: border-color 0.2s;
     }
-    .link-card:hover {
-      border-color: #333;
-    }
+    .link-card:hover { border-color: #333; }
     .link-info h3 { font-size: 15px; color: #fff; margin-bottom: 4px; font-weight: 600; }
     .link-info p { font-size: 12px; color: #666; }
     
@@ -245,20 +242,10 @@
       justify-content: space-between;
       transition: all 0.2s ease;
     }
-    .task-item.active {
-      border-color: #444444;
-      background: #161616;
-    }
-    .task-item.completed {
-      opacity: 0.6;
-      border-color: #1a1a1a;
-    }
+    .task-item.active { border-color: #444444; background: #161616; }
+    .task-item.completed { opacity: 0.6; border-color: #1a1a1a; }
 
-    .task-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+    .task-left { display: flex; align-items: center; gap: 12px; }
     .task-icon {
       width: 32px;
       height: 32px;
@@ -271,22 +258,9 @@
       font-size: 13px;
       color: #aaa;
     }
-    .task-info h4 {
-      font-size: 14px;
-      color: #fff;
-      margin-bottom: 2px;
-    }
-    .task-info p {
-      font-size: 12px;
-      color: #666;
-    }
-    .task-right {
-      font-size: 13px;
-      color: #888;
-      min-width: 45px;
-      text-align: right;
-      font-weight: 500;
-    }
+    .task-info h4 { font-size: 14px; color: #fff; margin-bottom: 2px; }
+    .task-info p { font-size: 12px; color: #666; }
+    .task-right { font-size: 13px; color: #888; min-width: 45px; text-align: right; font-weight: 500; }
 
     .claim-btn {
       width: 100%;
@@ -357,7 +331,7 @@
           </div>
         </div>
 
-        <!-- MY LINKS TAB AREA -->
+        <!-- MY LINKS SECTION -->
         <div class="section-title">
           <span>My Created Links</span>
         </div>
@@ -407,6 +381,13 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
+    // GENERATE OR REUSE ANONYMOUS DEVICE OWNER ID
+    let ownerId = localStorage.getItem('chronimium_owner_id');
+    if (!ownerId) {
+      ownerId = 'device_' + Math.random().toString(36).substring(2, 15);
+      localStorage.setItem('chronimium_owner_id', ownerId);
+    }
+
     let exploreUnsubscribe = null;
     let myLinksUnsubscribe = null;
 
@@ -445,6 +426,7 @@
           encoded,
           tasks,
           public: isPublic,
+          ownerId: ownerId,
           createdByName: 'Anonymous',
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
@@ -485,11 +467,12 @@
       if (myLinksUnsubscribe) myLinksUnsubscribe();
 
       myLinksUnsubscribe = db.collection('links')
+        .where('ownerId', '==', ownerId)
         .orderBy('createdAt', 'desc')
         .limit(50)
         .onSnapshot((snap) => {
           if (snap.empty) {
-            grid.innerHTML = '<div class="empty">No links created yet</div>';
+            grid.innerHTML = '<div class="empty">No links created from this browser yet</div>';
             return;
           }
 
@@ -537,6 +520,7 @@
           snap.forEach(doc => {
             const data = doc.data();
             const safe = encodeURIComponent(data.encoded);
+            const isOwner = data.ownerId === ownerId;
             const card = document.createElement('div');
             card.className = 'link-card';
             card.innerHTML = `
@@ -546,6 +530,7 @@
               </div>
               <div class="action-btns">
                 <button class="btn-action" onclick="window.open('?u=${safe}', '_blank')">Open</button>
+                ${isOwner ? `<button class="btn-action btn-danger" onclick="deleteLink('${doc.id}')">Delete</button>` : ''}
               </div>
             `;
             grid.appendChild(card);
