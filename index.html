@@ -69,6 +69,7 @@
       border-radius: 16px;
       padding: 32px;
       box-shadow: 0 0 40px rgba(255,255,255,0.03);
+      margin-bottom: 32px;
     }
 
     .brand {
@@ -144,32 +145,62 @@
       cursor: pointer;
     }
 
-    .links-grid { display: grid; gap: 16px; }
+    /* MY LINKS & EXPLORE LISTS */
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .links-grid { display: grid; gap: 14px; }
     .link-card {
       background: #111;
       border: 1px solid #1f1f1f;
       border-radius: 12px;
-      padding: 20px;
+      padding: 18px 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      transition: border-color 0.2s;
     }
-    .link-info h3 { font-size: 16px; color: #fff; margin-bottom: 4px; }
-    .link-info p { font-size: 13px; color: #666; }
-    .open-btn {
-      background: #fff;
-      color: #000;
-      border: none;
-      padding: 8px 16px;
+    .link-card:hover {
+      border-color: #333;
+    }
+    .link-info h3 { font-size: 15px; color: #fff; margin-bottom: 4px; font-weight: 600; }
+    .link-info p { font-size: 12px; color: #666; }
+    
+    .action-btns { display: flex; gap: 8px; }
+    .btn-action {
+      background: #1a1a1a;
+      color: #fff;
+      border: 1px solid #2a2a2a;
+      padding: 7px 12px;
       border-radius: 8px;
-      font-weight: 600;
+      font-weight: 500;
       cursor: pointer;
-      font-size: 13px;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    .btn-action:hover {
+      background: #252525;
+      border-color: #444;
+    }
+    .btn-action.btn-danger {
+      color: #ff5555;
+      border-color: rgba(255, 85, 85, 0.2);
+      background: rgba(255, 85, 85, 0.05);
+    }
+    .btn-action.btn-danger:hover {
+      background: rgba(255, 85, 85, 0.15);
+      border-color: #ff5555;
     }
 
-    .empty { text-align: center; color: #555; padding: 40px 20px; }
+    .empty { text-align: center; color: #555; padding: 30px 20px; background: #0d0d0d; border-radius: 12px; border: 1px dashed #1a1a1a; font-size: 13px; }
 
-    /* UNLOCK PAGE (Updated to match dark dashboard theme) */
+    /* UNLOCK PAGE */
     .unlock-container {
       min-height: 100vh;
       display: flex;
@@ -325,6 +356,14 @@
             <button class="copy-btn" onclick="copyLink()">Copy Link</button>
           </div>
         </div>
+
+        <!-- MY LINKS TAB AREA -->
+        <div class="section-title">
+          <span>My Created Links</span>
+        </div>
+        <div class="links-grid" id="myLinksGrid">
+          <div class="empty">Loading my links...</div>
+        </div>
       </div>
 
       <!-- EXPLORE -->
@@ -354,6 +393,8 @@
   </div>
 
   <script>
+    const AD_DIRECT_LINK = "YOUR_DIRECT_AD_LINK_HERE";
+
     const firebaseConfig = {
       apiKey: "AIzaSyDmbZn2A9rC5i2Nz52NEluy2XhwiUqHFe4",
       authDomain: "chronimium-d7a8b.firebaseapp.com",
@@ -367,6 +408,7 @@
     const db = firebase.firestore();
 
     let exploreUnsubscribe = null;
+    let myLinksUnsubscribe = null;
 
     function showPage(page, evt) {
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -378,10 +420,7 @@
       if (page === 'explore') {
         listenExploreRealtime();
       } else {
-        if (exploreUnsubscribe) {
-          exploreUnsubscribe();
-          exploreUnsubscribe = null;
-        }
+        listenMyLinksRealtime();
       }
     }
 
@@ -401,16 +440,14 @@
       const fullLink = window.location.origin + window.location.pathname + '?u=' + encodeURIComponent(encoded);
 
       try {
-        if (isPublic) {
-          await db.collection('links').add({
-            title,
-            encoded,
-            tasks,
-            public: true,
-            createdByName: 'Anonymous',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-          });
-        }
+        await db.collection('links').add({
+          title,
+          encoded,
+          tasks,
+          public: isPublic,
+          createdByName: 'Anonymous',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
 
         document.getElementById('generatedLink').value = fullLink;
         document.getElementById('result').style.display = 'block';
@@ -430,6 +467,54 @@
       return (str || '').replace(/[&<>"']/g, (m) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
       }[m]));
+    }
+
+    async function deleteLink(docId) {
+      if (!confirm("Are you sure you want to delete this link?")) return;
+      try {
+        await db.collection('links').doc(docId).delete();
+      } catch (err) {
+        console.error("Delete failed:", err);
+        alert("Failed to delete link.");
+      }
+    }
+
+    // REALTIME LISTENERS
+    function listenMyLinksRealtime() {
+      const grid = document.getElementById('myLinksGrid');
+      if (myLinksUnsubscribe) myLinksUnsubscribe();
+
+      myLinksUnsubscribe = db.collection('links')
+        .orderBy('createdAt', 'desc')
+        .limit(50)
+        .onSnapshot((snap) => {
+          if (snap.empty) {
+            grid.innerHTML = '<div class="empty">No links created yet</div>';
+            return;
+          }
+
+          grid.innerHTML = '';
+          snap.forEach(doc => {
+            const data = doc.data();
+            const safe = encodeURIComponent(data.encoded);
+            const card = document.createElement('div');
+            card.className = 'link-card';
+            card.innerHTML = `
+              <div class="link-info">
+                <h3>${escapeHtml(data.title)}</h3>
+                <p>${data.tasks || 1} tasks • ${data.public ? 'Public' : 'Private'}</p>
+              </div>
+              <div class="action-btns">
+                <button class="btn-action" onclick="window.open('?u=${safe}', '_blank')">Check</button>
+                <button class="btn-action btn-danger" onclick="deleteLink('${doc.id}')">Delete</button>
+              </div>
+            `;
+            grid.appendChild(card);
+          });
+        }, (err) => {
+          console.error(err);
+          grid.innerHTML = '<div class="empty">Error loading links</div>';
+        });
     }
 
     function listenExploreRealtime() {
@@ -459,7 +544,9 @@
                 <h3>${escapeHtml(data.title)}</h3>
                 <p>${data.tasks || 1} tasks • by Anonymous</p>
               </div>
-              <button class="open-btn" onclick="window.open('?u=${safe}', '_blank')">Open</button>
+              <div class="action-btns">
+                <button class="btn-action" onclick="window.open('?u=${safe}', '_blank')">Open</button>
+              </div>
             `;
             grid.appendChild(card);
           });
@@ -468,6 +555,9 @@
           grid.innerHTML = '<div class="empty">Error loading links</div>';
         });
     }
+
+    // INITIAL LOAD
+    listenMyLinksRealtime();
 
     // UNLOCK SYSTEM
     const params = new URLSearchParams(window.location.search);
@@ -515,7 +605,7 @@
             <div class="task-icon">${completed.includes(i) ? '✓' : '•'}</div>
             <div class="task-info">
               <h4>Task ${i + 1}</h4>
-              <p>${completed.includes(i) ? 'Completed' : (i === currentTask ? 'Click to start' : 'Locked')}</p>
+              <p>${completed.includes(i) ? 'Completed' : (i === currentTask ? 'Click to start ad' : 'Locked')}</p>
             </div>
           </div>
           <div class="task-right" id="status-${i}">${statusText}</div>
@@ -532,6 +622,11 @@
 
     function startTask(index) {
       if (isRunning || index !== currentTask || completed.includes(index)) return;
+      
+      if (AD_DIRECT_LINK && AD_DIRECT_LINK !== "YOUR_DIRECT_AD_LINK_HERE") {
+        window.open(AD_DIRECT_LINK, '_blank');
+      }
+
       isRunning = true;
 
       const statusEl = document.getElementById('status-' + index);
